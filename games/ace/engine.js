@@ -121,7 +121,8 @@ class AceGameEngine extends EventEmitter {
 
     // check round completion
     if (this.isRoundComplete()) {
-      setTimeout(() => this.handleRoundEnd(), 2000);
+      this.broadcastStateWithCurrentTurnNull();
+      setTimeout(() => this.handleRoundEnd(), 4000);
       return;
     }
 
@@ -192,7 +193,7 @@ class AceGameEngine extends EventEmitter {
       (p) => p.id === highestRankId,
     );
     this.turn = newIndex !== -1 ? newIndex : 0;
-    setTimeout(() => this.broadcastState(),3000);
+    this.broadcastState();
   }
 
   /* ---------------- FIND HIGHEST ---------------- */
@@ -240,10 +241,34 @@ class AceGameEngine extends EventEmitter {
     };
   }
 
+   snapshotWithCurrentTurnNull() {
+    return {
+      players: this.players.map((p) => ({
+        username: p.id,
+        cardsCount: p.hand.length,
+      })),
+      cardsList: this.players.map((p) => ({
+        username: p.id,
+        cards: [...p.hand],
+      })),
+      currentTurn: null,
+      roundSuit: this.roundSuit,
+      roundCards: [...this.roundCards],
+      message: this.lastMessage,
+    };
+  }
+
   /* ---------------- BROADCAST ---------------- */
 
   broadcastState() {
     this.emit("ace_state", this.snapshot());
+    if(this.activePlayers[this.turn]?.isBot){
+       this.playBotTurn();
+    }
+  }
+
+   broadcastStateWithCurrentTurnNull() {
+    this.emit("ace_state", this.snapshotWithCurrentTurnNull());
     if(this.activePlayers[this.turn]?.isBot){
        this.playBotTurn();
     }

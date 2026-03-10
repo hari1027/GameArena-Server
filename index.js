@@ -52,10 +52,15 @@ const {
   getAceGame,
 } = require("./managers/aceGameManager");
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://game-citadel.netlify.app"
+];
+
 const app = express();
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: allowedOrigins,
   }),
 );
 app.use(express.json());
@@ -67,7 +72,7 @@ const JWT_EXPIRES_IN = "1d";
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   },
 });

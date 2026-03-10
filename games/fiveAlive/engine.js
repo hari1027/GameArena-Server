@@ -337,7 +337,7 @@ class FiveAliveEngine extends EventEmitter {
 
   deleteRoom() {
     // Replace with your API call
-    fetch(`http://localhost:3000/gameCompleted/${this.roomId}`, {
+    fetch(`${process.env.SERVER_URL}/gameCompleted/${this.roomId}`, {
       method: "POST",
     })
       .then(() => console.log("Room deleted"))

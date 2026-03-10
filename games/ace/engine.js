@@ -192,7 +192,7 @@ class AceGameEngine extends EventEmitter {
       (p) => p.id === highestRankId,
     );
     this.turn = newIndex !== -1 ? newIndex : 0;
-    this.broadcastState();
+    setTimeout(() => this.broadcastState(),3000);
   }
 
   /* ---------------- FIND HIGHEST ---------------- */
@@ -252,7 +252,7 @@ class AceGameEngine extends EventEmitter {
   /* ---------------- DELETE ROOM ---------------- */
 
   deleteRoom() {
-    fetch(`http://localhost:3000/gameCompleted/${this.roomId}`, {
+    fetch(`${process.env.SERVER_URL}/gameCompleted/${this.roomId}`, {
       method: "POST",
     })
       .then(() => console.log("Room deleted"))

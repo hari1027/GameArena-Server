@@ -236,7 +236,7 @@ class FourCardChallengeEngine extends EventEmitter {
   }
 
   deleteRoom() {
-    fetch(`http://localhost:3000/gameCompleted/${this.roomId}`, {
+    fetch(`${process.env.SERVER_URL}/gameCompleted/${this.roomId}`, {
       method: "POST",
     }).catch(() => {});
   }

@@ -52,9 +52,20 @@ const {
   getAceGame,
 } = require("./managers/aceGameManager");
 
+const {
+  bindTicketToRideEngineEvents,
+  registerTicketToRideGameSockets,
+} = require("./sockets/ticketToRideGameSocket");
+const {
+  startTicketToRideGame,
+  setTicketToRideGame,
+  getTicketToRideGame,
+  endTicketToRideGame,
+} = require("./managers/ticketToRideGameManager");
+
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://game-citadel.netlify.app"
+  "https://game-citadel.netlify.app",
 ];
 
 const app = express();
@@ -221,19 +232,21 @@ const emitRoomUpdate = async (roomId) => {
     .select("username")
     .eq("room_id", roomId);
 
-  io.to(roomId).emit("room_update", {
-    roomId,
-    gameName: room.game_name,
-    gameType: room.game_type,
-    host: room.host,
-    players: players.map((p) => p.username),
-    message: room.message,
-    maxPlayers: room.MaxPlayers,
-    minPlayers: room.MinPlayers,
-    isEvenPlayersReq: room.is_Even_Players,
-    createdAt: room.created_at,
-    timeNow: new Date().toISOString(),
-  });
+  if (room && room !== null) {
+    io.to(roomId).emit("room_update", {
+      roomId,
+      gameName: room.game_name,
+      gameType: room.game_type,
+      host: room.host,
+      players: players.map((p) => p.username),
+      message: room.message,
+      maxPlayers: room.MaxPlayers,
+      minPlayers: room.MinPlayers,
+      isEvenPlayersReq: room.is_Even_Players,
+      createdAt: room.created_at,
+      timeNow: new Date().toISOString(),
+    });
+  }
 };
 
 async function handleFinalDisconnect(username, roomId, socket) {
@@ -255,31 +268,38 @@ async function handleFinalDisconnect(username, roomId, socket) {
       .eq("room_id", roomId)
       .eq("username", username);
 
-    if(room.game_name === "Five Alive"){
+    if (room.game_name === "Five Alive") {
       const engine = getFiveAliveGame(roomId);
       if (engine) {
-       engine.replacePlayerWithBot(username, botName);
+        engine.replacePlayerWithBot(username, botName);
       }
     }
 
-    if(room.game_name === "Four Card Challenge"){
+    if (room.game_name === "Four Card Challenge") {
       const engine = getFourCardChallengeGame(roomId);
       if (engine) {
-       engine.replacePlayerWithBot(username, botName);
+        engine.replacePlayerWithBot(username, botName);
       }
     }
 
-    if(room.game_name === "Seven Card Challenge"){
+    if (room.game_name === "Seven Card Challenge") {
       const engine = getSevenCardChallengeGame(roomId);
       if (engine) {
-       engine.replacePlayerWithBot(username, botName);
+        engine.replacePlayerWithBot(username, botName);
       }
     }
 
-    if(room.game_name === "Ace"){
+    if (room.game_name === "Ace") {
       const engine = getAceGame(roomId);
       if (engine) {
-       engine.replacePlayerWithBot(username, botName);
+        engine.replacePlayerWithBot(username, botName);
+      }
+    }
+
+    if (room.game_name === "Ticket To Ride") {
+      const engine = getTicketToRideGame(roomId);
+      if (engine) {
+        engine.replacePlayerWithBot(username, botName);
       }
     }
 
@@ -314,6 +334,9 @@ async function handleFinalDisconnect(username, roomId, socket) {
         }
         if (room.game_name === "Ace") {
           endAceGame(roomId);
+        }
+        if (room.game_name === "Ticket To Ride") {
+          endTicketToRideGame(roomId);
         }
         return;
       }
@@ -396,6 +419,7 @@ io.on("connection", (socket) => {
   registerFourCardChallengeGameSockets(io, socket);
   registerSevenCardChallengeGameSockets(io, socket);
   registerAceGameSockets(io, socket);
+  registerTicketToRideGameSockets(io, socket);
 
   socket.on("pong", () => {
     socket.isAlive = true;
@@ -435,13 +459,12 @@ io.on("connection", (socket) => {
         }
       }
 
-      if(roomData.state === "Closed"){
-         socket.emit("join_error", {
-            message:
-              "Room is already Closed",
-            to: username,
-          });
-          return;
+      if (roomData.state === "Closed") {
+        socket.emit("join_error", {
+          message: "Room is already Closed",
+          to: username,
+        });
+        return;
       }
 
       const { data: existing } = await supabase
@@ -479,8 +502,6 @@ io.on("connection", (socket) => {
         });
         return;
       }
-
-
 
       socket.username = username;
 
@@ -671,6 +692,13 @@ io.on("connection", (socket) => {
       gameObj["to"] = username;
       socket.emit("Ace Game Object", gameObj);
     }
+    if (room.game_name === "Ticket To Ride" && room.state === "Closed") {
+      const engine = getTicketToRideGame(roomId);
+      if (!engine) return;
+      const gameObj = engine.snapshot();
+      gameObj["to"] = username;
+      socket.emit("TicketToRide Game Object", gameObj);
+    }
 
     // socket.on("speaking", ({ roomId, speaking }) => {
     //   socket.to(roomId).emit("speaking_update", {
@@ -699,8 +727,7 @@ io.on("connection", (socket) => {
     }, 5000); // 5 sec grace
 
     disconnectTimers.set(username, { timer, roomId });
-   
-    
+
     socket.to(roomId).emit("user disconnection", {
       message: `${username} disconnected let's wait for 5 seconds for him/her to be back . Players Please dont do any actions now`,
     });
@@ -793,7 +820,7 @@ app.post("/leave_room", authenticateToken, async (req, res) => {
       if (userSocket) {
         if (room.state !== "Closed") {
           userSocket.intentionalDisconnect = true;
-        }else {
+        } else {
           userSocket.intentionalDisconnect = false;
         }
         userSocket.leave(roomId);
@@ -1236,6 +1263,12 @@ app.post("/rooms/:roomId/startGame", authenticateToken, async (req, res) => {
       const engine = await setAceGame(roomId, playerIds);
       bindAceEngineEvents(io, roomId, engine);
       startAceGame(engine);
+    }
+
+    if (room.game_name === "Ticket To Ride") {
+      const engine = await setTicketToRideGame(roomId, playerIds);
+      bindTicketToRideEngineEvents(io, roomId, engine);
+      startTicketToRideGame(engine);
     }
 
     emitRoomUpdate(roomId);
